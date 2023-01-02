@@ -25,6 +25,7 @@ pub fn builtin_glyph(
     let mut glyph = match character {
         // Box drawing characters and block elements.
         '\u{2500}'..='\u{259f}' => box_drawing(character, metrics, offset),
+        '\u{e0b0}'..='\u{e0b3}' => powerline_drawing(character, metrics),
         _ => return None,
     };
 
@@ -37,8 +38,9 @@ pub fn builtin_glyph(
 }
 
 fn box_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> RasterizedGlyph {
-    let height = (metrics.line_height as i32 + offset.y as i32) as usize;
-    let width = (metrics.average_advance as i32 + offset.x as i32) as usize;
+    // Ensure that width and height is at least one.
+    let height = (metrics.line_height as i32 + offset.y as i32).max(1) as usize;
+    let width = (metrics.average_advance as i32 + offset.x as i32).max(1) as usize;
     // Use one eight of the cell width, since this is used as a step size for block elemenets.
     let stroke_size = cmp::max((width as f32 / 8.).round() as usize, 1);
     let heavy_stroke_size = stroke_size * 2;
@@ -71,14 +73,14 @@ fn box_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> Raster
             for stroke_size in 0..2 * stroke_size {
                 let stroke_size = stroke_size as f32 / 2.;
                 if character == '\u{2571}' || character == '\u{2573}' {
-                    let h = y_end - stroke_size as f32;
+                    let h = y_end - stroke_size;
                     let from_y = f_x(from_x, h);
                     let to_y = f_x(to_x, h);
                     canvas.draw_line(from_x, from_y, to_x, to_y);
                 }
                 if character == '\u{2572}' || character == '\u{2573}' {
-                    let from_y = g_x(from_x, stroke_size as f32);
-                    let to_y = g_x(to_x, stroke_size as f32);
+                    let from_y = g_x(from_x, stroke_size);
+                    let to_y = g_x(to_x, stroke_size);
                     canvas.draw_line(from_x, from_y, to_x, to_y);
                 }
             }
@@ -345,7 +347,7 @@ fn box_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> Raster
             if character == '\u{256d}' || character == '\u{2570}' {
                 let center = canvas.x_center() as usize;
 
-                let extra_offset = if stroke_size % 2 == width % 2 { 0 } else { 1 };
+                let extra_offset = usize::from(stroke_size % 2 != width % 2);
 
                 let buffer = canvas.buffer_mut();
                 for y in 1..height {
@@ -363,7 +365,7 @@ fn box_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> Raster
             if character == '\u{256d}' || character == '\u{256e}' {
                 let center = canvas.y_center() as usize;
 
-                let extra_offset = if stroke_size % 2 == height % 2 { 0 } else { 1 };
+                let extra_offset = usize::from(stroke_size % 2 != height % 2);
 
                 let buffer = canvas.buffer_mut();
                 if extra_offset != 0 {
@@ -422,7 +424,7 @@ fn box_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> Raster
 
             let x = match character {
                 '\u{2590}' => canvas.x_center(),
-                '\u{2595}' => width as f32 - rect_width,
+                '\u{2595}' => width - rect_width,
                 _ => 0.,
             };
 
@@ -490,6 +492,61 @@ fn box_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> Raster
         advance: (width as i32, height as i32),
     }
 }
+
+fn powerline_drawing(character: char, metrics: &Metrics) -> RasterizedGlyph {
+    let height = metrics.line_height as usize;
+    let width = metrics.average_advance as usize;
+    let stroke_size = cmp::max(metrics.underline_thickness as usize, 1);
+    let mut canvas = Canvas::new(width, height);
+
+    let x_end = width as f32 - 1.;
+    let y_end = height as f32 - 1.;
+    let y_center = y_end / 2.;
+
+    // Powerline symbols: '','','',''.
+    for stroke_size in 0..2 * stroke_size {
+        let stroke_size = stroke_size as f32 / 2.;
+        if character == '\u{e0b0}' || character == '\u{e0b1}' {
+            canvas.draw_line(0., stroke_size, x_end - stroke_size, y_center);
+            canvas.draw_line(0., y_end - stroke_size, x_end - stroke_size, y_center);
+        }
+        if character == '\u{e0b2}' || character == '\u{e0b3}' {
+            canvas.draw_line(stroke_size, y_center, x_end, stroke_size);
+            canvas.draw_line(stroke_size, y_center, x_end, y_end - stroke_size);
+        }
+    }
+
+    if character == '\u{e0b0}' || character == '\u{e0b2}' {
+        let buffer = canvas.buffer_mut();
+        for row in 0..height {
+            let row_offset = row * width;
+            if character == '\u{e0b0}' {
+                for index in 1..width {
+                    let index = row_offset + index;
+                    if buffer[index - 1]._r.saturating_sub(u8::MAX / 4) > buffer[index]._r {
+                        break;
+                    }
+
+                    buffer[index - 1] = COLOR_FILL;
+                }
+            } else {
+                for index in (1..width).rev() {
+                    let index = row_offset + index;
+                    if buffer[index - 1]._r < buffer[index]._r.saturating_sub(u8::MAX / 4) {
+                        break;
+                    }
+
+                    buffer[index] = COLOR_FILL;
+                }
+            }
+        }
+    }
+
+    let top = height as i32 + metrics.descent as i32;
+    let buffer = BitmapBuffer::Rgb(canvas.into_raw());
+    RasterizedGlyph { character, top, left: 0, height: height as i32, width: width as i32, buffer, advance: (width as i32, height as i32) }
+}
+
 
 #[repr(packed)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -592,13 +649,13 @@ impl Canvas {
     /// Draws a horizontal straight line from (`x`, `y`) of `size` with the given `stroke_size`.
     fn draw_h_line(&mut self, x: f32, y: f32, size: f32, stroke_size: usize) {
         let (start_y, end_y) = self.h_line_bounds(y, stroke_size);
-        self.draw_rect(x, start_y as f32, size, (end_y - start_y) as f32, COLOR_FILL);
+        self.draw_rect(x, start_y, size, end_y - start_y, COLOR_FILL);
     }
 
     /// Draws a vertical straight line from (`x`, `y`) of `size` with the given `stroke_size`.
     fn draw_v_line(&mut self, x: f32, y: f32, size: f32, stroke_size: usize) {
         let (start_x, end_x) = self.v_line_bounds(x, stroke_size);
-        self.draw_rect(start_x as f32, y, (end_x - start_x) as f32, size, COLOR_FILL);
+        self.draw_rect(start_x, y, end_x - start_x, size, COLOR_FILL);
     }
 
     /// Draws a rect from the (`x`, `y`) of the given `width` and `height` using `color`.
@@ -750,7 +807,7 @@ impl Canvas {
 
                 let x_next = (x + 1.).clamp(0., v_line_bounds.1 as f32 - 1.);
                 let x = x.clamp(0., v_line_bounds.1 as f32 - 1.);
-                let y = y.clamp(0., radius_y as f32);
+                let y = y.clamp(0., radius_y);
 
                 self.put_pixel(x, y, color_1);
                 self.put_pixel(x_next, y, color_2);
