@@ -25,7 +25,7 @@ pub fn builtin_glyph(
     let mut glyph = match character {
         // Box drawing characters and block elements.
         '\u{2500}'..='\u{259f}' => box_drawing(character, metrics, offset),
-        '\u{e0b0}'..='\u{e0b3}' => powerline_drawing(character, metrics),
+        '\u{e0b0}'..='\u{e0b3}' => powerline_drawing(character, metrics, offset),
         _ => return None,
     };
 
@@ -493,10 +493,12 @@ fn box_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> Raster
     }
 }
 
-fn powerline_drawing(character: char, metrics: &Metrics) -> RasterizedGlyph {
-    let height = metrics.line_height as usize;
-    let width = metrics.average_advance as usize;
-    let stroke_size = cmp::max(metrics.underline_thickness as usize, 1);
+fn powerline_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> RasterizedGlyph {
+    let height = (metrics.line_height as i32 + offset.y as i32) as usize;
+    let width = (metrics.average_advance as i32 + offset.x as i32) as usize;
+    // Use one eight of the cell width, since this is used as a step size for block elemenets.
+    let stroke_size = cmp::max((width as f32 / 8.).round() as usize, 1);
+
     let mut canvas = Canvas::new(width, height);
 
     let x_end = width as f32 - 1.;
@@ -507,12 +509,12 @@ fn powerline_drawing(character: char, metrics: &Metrics) -> RasterizedGlyph {
     for stroke_size in 0..2 * stroke_size {
         let stroke_size = stroke_size as f32 / 2.;
         if character == '\u{e0b0}' || character == '\u{e0b1}' {
-            canvas.draw_line(0., stroke_size, x_end - stroke_size, y_center);
-            canvas.draw_line(0., y_end - stroke_size, x_end - stroke_size, y_center);
+            canvas.draw_line(-1., stroke_size - 1., x_end - stroke_size, y_center);
+            canvas.draw_line(-1., y_end - stroke_size + 1., x_end - stroke_size, y_center);
         }
         if character == '\u{e0b2}' || character == '\u{e0b3}' {
-            canvas.draw_line(stroke_size, y_center, x_end, stroke_size);
-            canvas.draw_line(stroke_size, y_center, x_end, y_end - stroke_size);
+            canvas.draw_line(stroke_size, y_center, x_end + 1., stroke_size - 1.);
+            canvas.draw_line(stroke_size, y_center, x_end + 1., y_end - stroke_size + 1.);
         }
     }
 
