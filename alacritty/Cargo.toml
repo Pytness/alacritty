@@ -42,6 +42,7 @@ bitflags = "1"
 dirs = "3.0.1"
 once_cell = "1.12"
 memoffset = "0.6.1"
+bresenham = "0.1.1"
 
 [build-dependencies]
 gl_generator = "0.14.0"
@@ -77,18 +78,6 @@ embed-resource = "1.7.2"
 
 [features]
 default = ["wayland", "x11"]
-x11 = [
-    "copypasta/x11",
-    "winit/x11",
-    "glutin/x11",
-    "glutin/glx",
-    "x11-dl",
-    "png"]
-wayland = [
-    "copypasta/wayland",
-    "glutin/wayland",
-    "winit/wayland",
-    "winit/wayland-dlopen",
-    "winit/wayland-csd-adwaita",
-    "wayland-client"]
+x11 = ["copypasta/x11", "winit/x11", "glutin/x11", "glutin/glx", "x11-dl", "png"]
+wayland = ["copypasta/wayland", "glutin/wayland", "winit/wayland", "winit/wayland-dlopen", "winit/wayland-csd-adwaita", "wayland-client"]
 nightly = []
