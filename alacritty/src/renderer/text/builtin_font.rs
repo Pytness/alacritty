@@ -6,6 +6,7 @@ use std::{cmp, mem, ops};
 use crossfont::{BitmapBuffer, Metrics, RasterizedGlyph};
 
 use crate::config::ui_config::Delta;
+use bresenham::Bresenham;
 
 // Colors which are used for filling shade variants.
 const COLOR_FILL_ALPHA_STEP_1: Pixel = Pixel { _r: 192, _g: 192, _b: 192 };
@@ -755,6 +756,15 @@ impl Canvas {
         }
     }
 
+    // Bresenham's line algorithm from (`from_x`, `from_y`) to (`to_x`, `to_y`).
+    fn draw_line_bresenham(&mut self, from_x: f32, from_y: f32, to_x: f32, to_y: f32) {
+        for (x, y) in
+            Bresenham::new((from_x as isize, from_y as isize), (to_x as isize, to_y as isize))
+        {
+            self.put_pixel(x as f32, y as f32, COLOR_FILL);
+        }
+    }
+
     /// Draws a part of an ellipse centered in `(0., 0.)` with `self.x_center()` and `self.y_center`
     /// vertex and co-vertex respectively using a given `stroke` in the bottom-right quadrant of the
     /// `Canvas` coordinate system.
@@ -842,6 +852,45 @@ impl Canvas {
     /// Fills the `Canvas` with the given `Color`.
     fn fill(&mut self, color: Pixel) {
         self.buffer.fill(color);
+    }
+
+    fn flip_x(&mut self) {
+        for y in 0..self.height {
+            let row = y * self.width;
+            let mut left = row;
+            let mut right = row + self.width - 1;
+
+            while left < right {
+                self.buffer.swap(left, right);
+                left += 1;
+                right -= 1;
+            }
+        }
+    }
+
+    /// Returns a new Canvas scaled down by two
+    /// Uses bilinear interpolation.
+    fn scale_down_by_two(&self) -> Canvas {
+        let new_width: usize = self.width / 2;
+        let new_height: usize = self.height / 2;
+
+        let mut new_canvas = Canvas::new(new_width, new_height);
+
+        for new_y in 0..new_height {
+            for new_x in 0..new_width {
+                let mut sum: u16 = 0;
+
+                for y in 0..2 {
+                    for x in 0..2 {
+                        sum += self.buffer[(new_y * 2 + y) * self.width + new_x * 2 + x]._r as u16;
+                    }
+                }
+
+                new_canvas.buffer[new_y * new_width + new_x] = Pixel::gray((sum / 4) as u8);
+            }
+        }
+
+        new_canvas
     }
 
     /// Consumes `Canvas` and returns its underlying storage as raw byte vector.
