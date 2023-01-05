@@ -530,26 +530,75 @@ fn powerline_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> 
                         break;
                     }
 
-                    buffer[index - 1] = COLOR_FILL;
-                }
-            } else {
-                for index in (1..width).rev() {
-                    let index = row_offset + index;
-                    if buffer[index - 1]._r < buffer[index]._r.saturating_sub(u8::MAX / 4) {
-                        break;
-                    }
+fn powerline_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> RasterizedGlyph {
+    let height = (metrics.line_height as i32 + offset.y as i32) as usize;
+    let width = (metrics.average_advance as i32 + offset.x as i32) as usize;
 
-                    buffer[index] = COLOR_FILL;
+    // Render the character to a canvas twice the size of the glyph.
+    // This is done to allow for later scaling down to the glyph size.
+
+    let render_height = (height * 2) as f32;
+    let render_width = (width * 2) as f32;
+
+    let render_middle = render_height / 2.;
+    let upper_middle = render_middle.floor() as f32;
+    let lower_middle = render_middle.ceil() as f32;
+
+    let mut canvas = Canvas::new(render_width as usize, render_height as usize);
+
+    let x_end = width as f32 - 1.;
+    let y_end = height as f32 - 1.;
+
+    let is_filled_symbol: bool = match character {
+        '\u{e0b0}' => true,
+        '\u{e0b2}' => true,
+        _ => false,
+    };
+
+    let reverse_render: bool = match character {
+        '\u{e0b2}' => true,
+        '\u{e0b3}' => true,
+        _ => false,
+    };
+
+    canvas.draw_line(0., 0., render_width - 1., upper_middle);
+    canvas.draw_line(0., render_height - 1., render_width - 1., lower_middle);
+    canvas.draw_line_bresenham(0., 0., render_width - 1., upper_middle);
+    canvas.draw_line_bresenham(0., render_height - 1., render_width - 1., lower_middle);
+
+    if is_filled_symbol {
+        let mut buffer = canvas.buffer_mut();
+
+        for row in 1..(render_height as usize) {
+            let row_offset = row * render_width as usize;
+
+            for index in 1..(render_width as usize) {
+                let index = row_offset + index;
+                if buffer[index - 1]._r > buffer[index]._r {
+                    break;
                 }
+
+                buffer[index - 1] = COLOR_FILL;
             }
         }
     }
 
-    let top = height as i32 + metrics.descent as i32;
-    let buffer = BitmapBuffer::Rgb(canvas.into_raw());
-    RasterizedGlyph { character, top, left: 0, height: height as i32, width: width as i32, buffer, advance: (width as i32, height as i32) }
-}
+    if reverse_render {
+        canvas.flip_x();
+    }
 
+    let top = height as i32 + metrics.descent as i32;
+    let buffer = BitmapBuffer::Rgb(canvas.scale_down_by_two().into_raw());
+    RasterizedGlyph {
+        character,
+        top,
+        left: 0,
+        height: height as i32,
+        width: width as i32,
+        buffer,
+        advance: (width as i32, height as i32),
+    }
+}
 
 #[repr(packed)]
 #[derive(Clone, Copy, Debug, Default)]
