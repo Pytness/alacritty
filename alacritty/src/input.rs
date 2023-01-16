@@ -1,4 +1,4 @@
-//! Handle input from glutin.
+//! Handle input from winit.
 //!
 //! Certain key combinations should send some escape sequence back to the PTY.
 //! In order to figure that out, state about which modifier keys are pressed
@@ -12,14 +12,14 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
 
-use glutin::dpi::PhysicalPosition;
-use glutin::event::{
+use winit::dpi::PhysicalPosition;
+use winit::event::{
     ElementState, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta, TouchPhase,
 };
-use glutin::event_loop::EventLoopWindowTarget;
+use winit::event_loop::EventLoopWindowTarget;
 #[cfg(target_os = "macos")]
-use glutin::platform::macos::EventLoopWindowTargetExtMacOS;
-use glutin::window::CursorIcon;
+use winit::platform::macos::EventLoopWindowTargetExtMacOS;
+use winit::window::CursorIcon;
 
 use alacritty_terminal::ansi::{ClearMode, Handler};
 use alacritty_terminal::event::EventListener;
@@ -51,7 +51,7 @@ const MIN_SELECTION_SCROLLING_HEIGHT: f64 = 5.;
 /// Number of pixels for increasing the selection scrolling speed factor by one.
 const SELECTION_SCROLLING_STEP: f64 = 20.;
 
-/// Processes input from glutin.
+/// Processes input from winit.
 ///
 /// An escape sequence may be emitted in case specific keys or key combinations
 /// are activated.
@@ -369,8 +369,8 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
         let display_offset = self.ctx.terminal().grid().display_offset();
         let old_point = self.ctx.mouse().point(&size_info, display_offset);
 
-        let x = min(max(x, 0), size_info.width() as i32 - 1) as usize;
-        let y = min(max(y, 0), size_info.height() as i32 - 1) as usize;
+        let x = x.clamp(0, size_info.width() as i32 - 1) as usize;
+        let y = y.clamp(0, size_info.height() as i32 - 1) as usize;
         self.ctx.mouse_mut().x = x;
         self.ctx.mouse_mut().y = y;
 
@@ -908,7 +908,7 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
     /// Check mouse icon state in relation to the message bar.
     fn message_bar_cursor_state(&self) -> Option<CursorIcon> {
         // Since search is above the message bar, the button is offset by search's height.
-        let search_height = if self.ctx.search_active() { 1 } else { 0 };
+        let search_height = usize::from(self.ctx.search_active());
 
         // Calculate Y position of the end of the last terminal line.
         let size = self.ctx.size_info();
@@ -977,8 +977,7 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
         };
 
         // Scale number of lines scrolled based on distance to boundary.
-        let delta = delta as i32 / step as i32;
-        let event = Event::new(EventType::Scroll(Scroll::Delta(delta)), Some(window_id));
+        let event = Event::new(EventType::Scroll(Scroll::Delta(delta / step)), Some(window_id));
 
         // Schedule event.
         let timer_id = TimerId::new(Topic::SelectionScrolling, window_id);
@@ -991,8 +990,8 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
 mod tests {
     use super::*;
 
-    use glutin::event::{DeviceId, Event as GlutinEvent, VirtualKeyCode, WindowEvent};
-    use glutin::window::WindowId;
+    use winit::event::{DeviceId, Event as WinitEvent, VirtualKeyCode, WindowEvent};
+    use winit::window::WindowId;
 
     use alacritty_terminal::event::Event as TerminalEvent;
 
@@ -1159,8 +1158,8 @@ mod tests {
 
                 let mut processor = Processor::new(context);
 
-                let event: GlutinEvent::<'_, TerminalEvent> = $input;
-                if let GlutinEvent::WindowEvent {
+                let event: WinitEvent::<'_, TerminalEvent> = $input;
+                if let WinitEvent::WindowEvent {
                     event: WindowEvent::MouseInput {
                         state,
                         button,
@@ -1200,7 +1199,7 @@ mod tests {
         name: single_click,
         initial_state: ClickState::None,
         initial_button: MouseButton::Other(0),
-        input: GlutinEvent::WindowEvent {
+        input: WinitEvent::WindowEvent {
             event: WindowEvent::MouseInput {
                 state: ElementState::Pressed,
                 button: MouseButton::Left,
@@ -1216,7 +1215,7 @@ mod tests {
         name: single_right_click,
         initial_state: ClickState::None,
         initial_button: MouseButton::Other(0),
-        input: GlutinEvent::WindowEvent {
+        input: WinitEvent::WindowEvent {
             event: WindowEvent::MouseInput {
                 state: ElementState::Pressed,
                 button: MouseButton::Right,
@@ -1232,7 +1231,7 @@ mod tests {
         name: single_middle_click,
         initial_state: ClickState::None,
         initial_button: MouseButton::Other(0),
-        input: GlutinEvent::WindowEvent {
+        input: WinitEvent::WindowEvent {
             event: WindowEvent::MouseInput {
                 state: ElementState::Pressed,
                 button: MouseButton::Middle,
@@ -1248,7 +1247,7 @@ mod tests {
         name: double_click,
         initial_state: ClickState::Click,
         initial_button: MouseButton::Left,
-        input: GlutinEvent::WindowEvent {
+        input: WinitEvent::WindowEvent {
             event: WindowEvent::MouseInput {
                 state: ElementState::Pressed,
                 button: MouseButton::Left,
@@ -1264,7 +1263,7 @@ mod tests {
         name: triple_click,
         initial_state: ClickState::DoubleClick,
         initial_button: MouseButton::Left,
-        input: GlutinEvent::WindowEvent {
+        input: WinitEvent::WindowEvent {
             event: WindowEvent::MouseInput {
                 state: ElementState::Pressed,
                 button: MouseButton::Left,
@@ -1280,7 +1279,7 @@ mod tests {
         name: multi_click_separate_buttons,
         initial_state: ClickState::DoubleClick,
         initial_button: MouseButton::Left,
-        input: GlutinEvent::WindowEvent {
+        input: WinitEvent::WindowEvent {
             event: WindowEvent::MouseInput {
                 state: ElementState::Pressed,
                 button: MouseButton::Right,

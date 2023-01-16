@@ -1,15 +1,13 @@
 use std::mem;
 
-use crate::gl;
 use crate::gl::types::*;
-use crate::renderer;
-use crate::renderer::shader::{ShaderVersion, ShaderProgram};
+use crate::renderer::shader::{ShaderProgram, ShaderVersion};
+use crate::{gl, renderer};
 
 /// Number of elements of the `textures[]` uniform.
 ///
 /// If the file `graphics.f.glsl` is modified, this value has to be updated.
 pub(super) const TEXTURES_ARRAY_SIZE: usize = 16;
-
 
 /// Sides where the vertex is located.
 ///
@@ -83,13 +81,14 @@ pub struct GraphicsShaderProgram {
 
 impl GraphicsShaderProgram {
     pub fn new(shader_version: ShaderVersion) -> Result<Self, renderer::Error> {
-        let program = ShaderProgram::new(shader_version, GRAPHICS_SHADER_V, GRAPHICS_SHADER_F)?;
+        let program =
+            ShaderProgram::new(shader_version, None, GRAPHICS_SHADER_V, GRAPHICS_SHADER_F)?;
 
         let u_cell_dimensions;
         let u_view_dimensions;
         let u_textures;
 
-         unsafe {
+        unsafe {
             // Uniform locations.
 
             macro_rules! uniform {
@@ -118,8 +117,7 @@ impl GraphicsShaderProgram {
 
         let (vao, vbo) = define_vertex_attributes(shader_version);
 
-        let shader =
-            Self { program, u_cell_dimensions, u_view_dimensions, u_textures, vao, vbo };
+        let shader = Self { program, u_cell_dimensions, u_view_dimensions, u_textures, vao, vbo };
 
         Ok(shader)
     }
