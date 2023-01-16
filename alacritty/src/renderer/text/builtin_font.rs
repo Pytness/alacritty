@@ -584,8 +584,8 @@ fn powerline_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> 
 
     let mut canvas = Canvas::new(render_width as usize, render_height as usize);
 
-    let x_end = width as f32 - 1.;
-    let y_end = height as f32 - 1.;
+    let _x_end = width as f32 - 1.;
+    let _y_end = height as f32 - 1.;
 
     let is_filled_symbol: bool = match character {
         '\u{e0b0}' => true,
@@ -605,7 +605,7 @@ fn powerline_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> 
     canvas.draw_line_bresenham(0., render_height - 1., render_width - 1., lower_middle);
 
     if is_filled_symbol {
-        let mut buffer = canvas.buffer_mut();
+        let buffer = canvas.buffer_mut();
 
         for row in 1..(render_height as usize) {
             let row_offset = row * render_width as usize;
