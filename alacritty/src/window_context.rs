@@ -42,7 +42,7 @@ use crate::clipboard::Clipboard;
 use crate::config::UiConfig;
 use crate::display::window::Window;
 use crate::display::Display;
-use crate::event::{ActionContext, Event, EventProxy, EventType, Mouse, SearchState};
+use crate::event::{ActionContext, Event, EventProxy, EventType, Mouse, SearchState, TouchPurpose};
 use crate::logging::LOG_TARGET_IPC_CONFIG;
 use crate::message_bar::MessageBuffer;
 use crate::scheduler::Scheduler;
@@ -62,6 +62,7 @@ pub struct WindowContext {
     notifier: Notifier,
     font_size: Size,
     mouse: Mouse,
+    touch: TouchPurpose,
     dirty: bool,
     occluded: bool,
     preserve_title: bool,
@@ -255,6 +256,7 @@ impl WindowContext {
             ipc_config: Default::default(),
             modifiers: Default::default(),
             mouse: Default::default(),
+            touch: Default::default(),
             dirty: Default::default(),
             occluded: Default::default(),
         })
@@ -310,10 +312,11 @@ impl WindowContext {
             self.display.pending_update.set_font(font);
         }
 
-        // Update display if padding options were changed.
+        // Update display if either padding options or resize increments were changed.
         let window_config = &old_config.window;
         if window_config.padding(1.) != self.config.window.padding(1.)
             || window_config.dynamic_padding != self.config.window.dynamic_padding
+            || window_config.resize_increments != self.config.window.resize_increments
         {
             self.display.pending_update.dirty = true;
         }
@@ -332,9 +335,17 @@ impl WindowContext {
             self.display.window.set_title(self.config.window.identity.title.clone());
         }
 
+        let opaque = self.config.window_opacity() >= 1.;
+
         // Disable shadows for transparent windows on macOS.
         #[cfg(target_os = "macos")]
-        self.display.window.set_has_shadow(self.config.window_opacity() >= 1.0);
+        self.display.window.set_has_shadow(opaque);
+
+        #[cfg(target_os = "macos")]
+        self.display.window.set_option_as_alt(self.config.window.option_as_alt);
+
+        // Change opacity state.
+        self.display.window.set_transparent(!opaque);
 
         // Update hint keys.
         self.display.hint_state.update_alphabet(self.config.hints.alphabet());
@@ -433,6 +444,7 @@ impl WindowContext {
             notifier: &mut self.notifier,
             display: &mut self.display,
             mouse: &mut self.mouse,
+            touch: &mut self.touch,
             dirty: &mut self.dirty,
             occluded: &mut self.occluded,
             terminal: &mut terminal,

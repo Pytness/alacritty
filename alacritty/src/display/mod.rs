@@ -469,6 +469,11 @@ impl Display {
             renderer.finish();
         }
 
+        // Set resize increments for the newly created window.
+        if config.window.resize_increments {
+            window.set_resize_increments(PhysicalSize::new(cell_width, cell_height));
+        }
+
         window.set_visible(true);
 
         #[allow(clippy::single_match)]
@@ -583,11 +588,10 @@ impl Display {
         });
     }
 
+    // XXX: this function must not call to any `OpenGL` related tasks. Renderer updates are
+    // performed in [`Self::process_renderer_update`] right befor drawing.
+    //
     /// Process update events.
-    ///
-    /// XXX: this function must not call to any `OpenGL` related tasks. Only logical update
-    /// of the state is being performed here. Rendering update takes part right before the
-    /// actual rendering.
     pub fn handle_update<T>(
         &mut self,
         terminal: &mut Term<T>,
@@ -642,6 +646,11 @@ impl Display {
         let search_lines = usize::from(search_active);
         new_size.reserve_lines(message_bar_lines + search_lines);
 
+        // Update resize increments.
+        if config.window.resize_increments {
+            self.window.set_resize_increments(PhysicalSize::new(cell_width, cell_height));
+        }
+
         // Resize PTY.
         pty_resize_handle.on_resize(new_size.into());
 
@@ -660,14 +669,11 @@ impl Display {
         self.size_info = new_size;
     }
 
+    // NOTE: Renderer updates are split off, since platforms like Wayland require resize and other
+    // OpenGL operations to be performed right before rendering. Otherwise they could lock the
+    // back buffer and render with the previous state. This also solves flickering during resizes.
+    //
     /// Update the state of the renderer.
-    ///
-    /// NOTE: The update to the renderer is split from the display update on purpose, since
-    /// on some platforms, like Wayland, resize and other OpenGL operations must be performed
-    /// right before rendering, otherwise they could lock the back buffer resulting in
-    /// rendering with the buffer of old size.
-    ///
-    /// This also resolves any flickering, since the resize is now synced with frame callbacks.
     pub fn process_renderer_update(&mut self) {
         let renderer_update = match self.pending_renderer_update.take() {
             Some(renderer_update) => renderer_update,
@@ -849,9 +855,9 @@ impl Display {
             );
         }
 
+        // Draw sixel graphics.
         self.renderer.graphics_draw(graphics_list, &size_info);
-
-        let mut rects = lines.rects(&metrics, &size_info, config.font.glyph_offset);
+        let mut rects = lines.rects(&metrics, &size_info);
 
         if let Some(vi_cursor_point) = vi_cursor_point {
             // Indicate vi mode by showing the cursor's position in the top right corner.
@@ -1136,12 +1142,7 @@ impl Display {
 
         // Add underline for preedit text.
         let underline = RenderLine { start, end, color: fg };
-        rects.extend(underline.rects(
-            Flags::UNDERLINE,
-            &metrics,
-            &self.size_info,
-            config.font.glyph_offset,
-        ));
+        rects.extend(underline.rects(Flags::UNDERLINE, &metrics, &self.size_info));
 
         let ime_popup_point = match preedit.cursor_end_offset {
             Some(cursor_end_offset) if cursor_end_offset != 0 => {

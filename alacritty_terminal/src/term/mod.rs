@@ -641,6 +641,10 @@ impl<T> Term<T> {
         delta = cmp::min(cmp::max(delta, min_delta), history_size as i32);
         self.vi_mode_cursor.point.line += delta;
 
+        let is_alt = self.mode.contains(TermMode::ALT_SCREEN);
+        self.grid.resize(!is_alt, num_lines, num_cols);
+        self.inactive_grid.resize(is_alt, num_lines, num_cols);
+
         // Invalidate selection and tabs only when necessary.
         if old_cols != num_cols {
             self.selection = None;
@@ -648,13 +652,10 @@ impl<T> Term<T> {
             // Recreate tabs list.
             self.tabs.resize(num_cols);
         } else if let Some(selection) = self.selection.take() {
-            let range = Line(0)..Line(num_lines as i32);
+            let max_lines = cmp::max(num_lines, old_lines) as i32;
+            let range = Line(0)..Line(max_lines);
             self.selection = selection.rotate(self, &range, -delta);
         }
-
-        let is_alt = self.mode.contains(TermMode::ALT_SCREEN);
-        self.grid.resize(!is_alt, num_lines, num_cols);
-        self.inactive_grid.resize(is_alt, num_lines, num_cols);
 
         // Clamp vi cursor to viewport.
         let vi_point = self.vi_mode_cursor.point;
@@ -1199,7 +1200,7 @@ impl<T: EventListener> Handler for Term<T> {
             Some('>') => {
                 trace!("Reporting secondary device attributes");
                 let version = version_number(env!("CARGO_PKG_VERSION"));
-                let text = format!("\x1b[>0;{};1c", version);
+                let text = format!("\x1b[>0;{version};1c");
                 self.event_proxy.send_event(Event::PtyWrite(text));
             },
             _ => debug!("Unsupported device attributes intermediate"),
@@ -1989,7 +1990,7 @@ impl<T: EventListener> Handler for Term<T> {
         self.event_proxy.send_event(Event::TextAreaSizeRequest(Arc::new(move |window_size| {
             let height = window_size.num_lines * window_size.cell_height;
             let width = window_size.num_cols * window_size.cell_width;
-            format!("\x1b[4;{};{}t", height, width)
+            format!("\x1b[4;{height};{width}t")
         })));
     }
 
@@ -2927,7 +2928,7 @@ mod tests {
         term.reset_damage();
         let vi_cursor_point = term.vi_mode_cursor.point;
         let line = vi_cursor_point.line.0 as usize;
-        let left = vi_cursor_point.column.0 as usize;
+        let left = vi_cursor_point.column.0;
         let right = left;
 
         let mut damaged_lines = match term.damage(None) {

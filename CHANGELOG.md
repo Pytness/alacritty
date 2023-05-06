@@ -5,17 +5,39 @@ The sections should follow the order `Packaging`, `Added`, `Changed`, `Fixed` an
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## 0.12.0-dev
+## 0.13.0-dev
+
+### Changed
+
+- Mode-specific bindings can now be bound in any mode for easier macros
+
+### Fixed
+
+- Character `;` inside the `URI` in `OSC 8` sequence breaking the URI
+- Selection on last line not updating correctly on resize
+- Keyboard input not working on macOS with some IMEs like Fig.io
+
+## 0.12.0
 
 ### Added
 
 - Uppercase `-T` short form for `--title`
+- Support for horizontal scrolling in mouse mode and alternative scrolling modes
+- Support for fractional scaling on Wayland with wp-fractional-scale protocol
+- Support for running on GLES context
+- Touchscreen input for click/scroll/select/zoom
+- `window.resize_increments` config option, disabled by default
 
 ### Changed
 
-- `font.glyph_offset.y` is now applied to underline/strikeout
 - Always use sRGB color space on macOS
 - Erase in line after the last column will no longer clear the last column
+- Open new windows by default with macOS `Cmd`+`N` binding
+- The hint about window transparency is now properly issued on Wayland and macOS
+- `window.decorations_theme_variant` could now control theme on macOS and Windows
+- The IME purpose is now set to `Terminal` which could help with OSK
+- `window.decorations_theme_variant` is now using `Dark`, `Light`, and `None` values
+- Resize increments are now set on macOS and X11 to resize by cell sizes
 
 ### Fixed
 
@@ -35,6 +57,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Reduced GPU memory usage
 - Low frame rate when multiple windows render at the same time
 - Redraw hanging until a keypress on X11 in rare cases
+- Window clipping when maximizing a window without decorations on Windows
+- Quadrants not aligned with half blocks with built-in font
+- EOT (`\x03`) escaping bracketed paste mode
+- Drag & Drop not working for the search bar
+- Simple-fullscreened window not resized when moving between monitors on macOS
+
+### Removed
+
+- `window.gtk_theme_variant` config field; use `window.decorations_theme_variant` instead
+- `alt_send_esc` is now always set to `true`
 
 ## 0.11.0
 
